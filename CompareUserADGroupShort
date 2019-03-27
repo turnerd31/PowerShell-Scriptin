@@ -1,0 +1,4 @@
+$result = @()
+$result = compare-object (Get-ADGroupMember -identity "GROUP ONE" ) (Get-ADGroupMember -identity "GROUP TWO" ) -Property 'SamAccountName' -IncludeEqual
+
+$result| Export-csv -path "PATH TO CSV.csv" -NoTypeInformation

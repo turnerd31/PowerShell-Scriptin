@@ -1,0 +1,22 @@
+$logFile=[Environment]::GetFolderPath("Desktop")+"\LOGFILE.txt"
+# Get users in specified OU
+$users= (Get-ADUser -Server pioneer.dew.twu -Filter * -SearchBase "DISTINGUISHED NAME OF OU")
+foreach($user in $users) {
+    $groupArray = @()
+    foreach ($group in Get-ADPrincipalGroupMembership $user) {
+        # Exclude groups from array
+        if ($group.name -ne "Domain Users" -and $group.name -ne "Ex-Employees") {
+            $groupArray = $groupArray + $group.name
+        }
+    }
+    # Check array size, log output of users with additional groups.
+    if ($groupArray.Count -gt 0) {
+        Write-Output "`n",$user.name | Tee-Object -Append -FilePath $logFile
+        foreach ($group in $groupArray) {
+            Write-Output "`t$group" | Tee-Object -Append -FilePath $logFile
+        }
+        Write-Host ""
+    } else {
+        Write-Host "Checked: ", $user.name
+    }
+}

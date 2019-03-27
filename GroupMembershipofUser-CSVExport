@@ -1,0 +1,4 @@
+author: The other guy
+
+$AdminCredentials = Get-Credential "USERNAME"
+Get-ADUser USER  -Credential $AdminCredentials -Properties MemberOf | select -ExpandProperty MemberOf | Export-csv -path "C:\PATH TO NEW FILE.csv" -NoTypeInformation

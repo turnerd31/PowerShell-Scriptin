@@ -1,0 +1,17 @@
+$AdminCredentials = Get-Credential "USERNAME"
+$groupname = "ADGROUPNAME"
+Get-ADGroupMember -identity $groupname -recursive | ForEach-Object {
+
+try {
+    $userName = $_.SamAccountName
+	$SamDN = Get-ADUser $userName
+    Write-Host "$userName Removed"
+	Remove-ADGroupMember -identity $groupname -Confirm: $false -Member $SamDN -AuthType Basic -Credential $AdminCredentials 
+    }
+    catch {
+            $SamDN = Get-ADUser $userName -Server "pioneer.dew.twu" 
+            Remove-ADGroupMember -identity $groupname -Server "fs.dew.twu" -Confirm: $false -Member $SamDN -AuthType Basic -Credential $AdminCredentials
+            Write-Output "PIO User: $userName Removed"
+            }
+
+}

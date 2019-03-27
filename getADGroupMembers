@@ -1,0 +1,4 @@
+#Most effecient way to get a CSV of all group members, even nested ones.
+
+
+Get-ADGroupMember -identity "INSERTGROUPNAMEHERE" -recursive | select name, samaccountname | Export-csv -path "C:\PATH TO NEW FILE.csv" -NoTypeInformation

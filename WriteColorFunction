@@ -1,0 +1,7 @@
+function Write-Color([String[]]$Text, [ConsoleColor[]]$Color) {
+    for ($i = 0; $i -lt $Text.Length; $i++) {
+        if (-Not $Color[$i]) { $Color = $Color += "White" }
+        Write-Host $Text[$i] -Foreground $Color[$i] -NoNewLine
+    }
+    Write-Host
+}

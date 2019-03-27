@@ -1,0 +1,33 @@
+#Check for users with the Protected attributes.
+
+$AdminCredentials = Get-Credential "USERNAME"
+
+$DomainGroupArray =@("Staff Group", "Alumni Group", "Faculty Group")
+
+ForEach($DomainGroup in $DomainGroupArray){
+    Write-Host "`n+++ Checking," $DomainGroup "+++`n"
+    Get-ADGroupMember $DomainGroup | Where-Object {$_.distinguishedName -like "*DC=FS*"} | ForEach-Object {
+        try{
+            $userInfo = Get-ADUser $_.SamAccountName -Server fs.dew.twu -Properties SamAccountName, Protected
+            if ($userInfo.Protected -eq "True") {
+                Write-Host $userInfo.SamAccountName
+            }
+        } catch {
+            Write-Host "!!! Error" $_.Exception.Message
+        }
+    }
+
+    Get-ADGroupMember $DomainGroup | Where-Object {$_.distinguishedName -like "*DC=PIONEER*"} | ForEach-Object {
+        try{
+            $userInfo = Get-ADUser $_.SamAccountName -Server pioneer.dew.twu -Properties SamAccountName, Protected
+            if ($userInfo.Protected -eq "True") {
+                Write-Host $userInfo.SamAccountName
+            }
+        } catch {
+            Write-Host "!!! Error" $_.Exception.Message
+        }
+    }
+
+    Write-Host "+++ Done +++"
+}
+Write-Host "`n+++ Check Complete +++"

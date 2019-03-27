@@ -1,0 +1,5 @@
+$result = @()
+$set1 = compare-object (Get-ADGroupMember -identity "GROUPONE" ) (Get-ADGroupMember -identity "GROUPTWO" ) -Property 'SamAccountName' -IncludeEqual -ExcludeDifferent -PassThru
+$set2 = compare-object (Get-ADGroupMember -identity "GROUPTHREE" ) (Get-ADGroupMember -identity "GROUPTWO" ) -Property 'SamAccountName' -IncludeEqual -ExcludeDifferent -PassThru
+$result = compare-object ($set1) ($set2) -Property SamAccountName -IncludeEqual -ExcludeDifferent
+$result.count

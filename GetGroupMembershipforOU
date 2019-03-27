@@ -1,0 +1,18 @@
+#See which groups users in an OU are in, as long as they have more than 2 groups. Excludes Domain Users and Ex-Employees
+
+$pioadd="C:\TEXTFILE"
+$array=@()
+$users= (Get-ADUser -Filter * -SearchBase "OU DISTINGUISHED NAME")
+foreach($user in $users)
+{  if  ((Get-ADPrincipalGroupMembership $user).Count -gt 2){
+    Add-Content $pioadd $user.name
+    foreach ($group in Get-ADPrincipalGroupMembership $user) {
+     if  ($group.name -ne "Domain Users" -and $group.name -ne "Ex-Employees") { 
+     $array= $group.name
+     Add-Content $pioadd $array
+     } 
+     }  
+   }
+}
+
+

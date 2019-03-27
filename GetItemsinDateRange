@@ -1,0 +1,5 @@
+Get-ChildItem 'X:\FOLDER LOCATION' -recurse -include @("*.pdf") | 
+    Where-Object { $_.CreationTime -ge "DATEONE" -and $_.CreationTime -le "DATETWO" } |
+        Select-Object Index, LastWriteTime, Name | Sort LastWriteTime | Format-Table -AutoSize | Tee-Object -Variable countit
+
+Write-Host `t " Total Items:" + ($countit.count) # Tee-Object adds four to the count for an unknown resaon, quick fix.

@@ -1,0 +1,25 @@
+$CombinedGroups = @("OffOfTech", "OffOfTechnology")
+$CompareGroup = "VPN Users"
+
+$CombinedArray = @()
+$CompareArray = @()
+
+ForEach ($Group in $CombinedGroups) {
+    $GetGroup = Get-ADGroup -Identity $Group -Server "fs.dew.twu"
+    $GroupMembers = Get-ADGroupMember -Identity $GetGroup
+    ForEach($Member in $GroupMembers){
+        $CombinedArray = $CombinedArray + $Member.samAccountName
+    }
+}
+
+$CombinedArray = $CombinedArray | select -Unique
+
+$GetGroup = Get-ADGroup -Identity $CompareGroup -Server "fs.dew.twu"
+$GroupMembers = Get-ADGroupMember -Identity $GetGroup
+ForEach($Member in $GroupMembers){
+    $CompareArray = $CompareArray + $Member.samAccountName
+}
+
+$result = compare-object ($CombinedArray) ($CompareArray) -IncludeEqual -ExcludeDifferent
+
+$result | Sort-Object InputObject | ft -Property InputObject -HideTableHeaders
