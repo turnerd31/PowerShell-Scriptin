@@ -1,4 +1,4 @@
 # Powershell-Scripting
-Useful powershell scripting
+Useful to me powershell scripting
 
-Scripts created by me. They're useful.
+
