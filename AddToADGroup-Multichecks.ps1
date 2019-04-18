@@ -1,18 +1,18 @@
 <#
     .SYNOPSIS
-        script to add users to a group of your choice from a text file. includes a check to see if the user is already in the group (creates group if it doesn't exist) and a check to see if the user doesn't exist or is already in the group. Prints all results to screen.
+        script created for automation purposes to add users from a text file to a group of choice. Includes a multiple checks: see if the user is already in the group, creates group if it doesn't already exist, and a check to see if the user doesn't exist or is already in the group. Prints all results to screen.
     .DESCRIPTION
        
     .EXAMPLE
       
         
     .NOTES
-        Author: Security Team
+        Author: Drew Turner
         Date :Summer 2018
 #>
 
 $AdminCredentials = Get-Credential "USERNAME"
-$GroupToAdd = 'ADGROUP'
+$GroupToAdd = 'NAMEOFADGROUP'
 $textfile = (Get-Content C:\LOCATION OF TEXT FILE)
 #The following is a check on the group. If it doesn't exist, it creates it.
     try{
