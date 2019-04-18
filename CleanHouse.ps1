@@ -1,5 +1,6 @@
 <#
 .Synopsis
+    Clean House the script formerly known as SpamRipper
     Simplified Search, Count, and Delete for exchange mailboxes using Search-Mailbox.
 
     Author: Drew Turner
