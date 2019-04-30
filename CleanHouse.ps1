@@ -148,7 +148,7 @@ DO { $deleteconfirm = GetDeleteConfirm } While ([string]::IsNullOrWhiteSpace($de
     if ($deleteconfirm -eq 'Y'){
 
     ForEach ($box in $mailboxArray){
-                Search-Mailbox -Identity "$box" -SearchQuery "$mailsubjectset$mailrecdateset" -TargetMailbox "aturner19@twu.edu" -TargetFolder "CleanHouse" -LogLevel Full -DeleteContent -Force                             
+                Search-Mailbox -Identity "$box" -SearchQuery "$mailsubjectset$mailrecdateset" -TargetMailbox "aturner19@twu.edu" -TargetFolder "CleanHouse Removals" -LogLevel Full -DeleteContent -Force                             
                                    }
 
                                  }
