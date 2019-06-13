@@ -5,7 +5,7 @@
 
     Author: Drew Turner
     Required Dependencies: Exchange Management Tools (Specifically the Get-Mailbox powershell cmdlet.)
-    Updated: November 2018
+    Updated: June 2019
 
 .DESCRIPTION
     This script provides a simplified way to search, count, and remove e-mail from an exchange environment.
@@ -140,6 +140,7 @@ ForEach ($box in $mailbox) {
 }
 
 Write-Host "The following users all have at least one result from your search: $mailboxArray"
+Write-Color "Mailbox count in array is: $mailboxArray.count" -Color Magenta
 
 if ($doprocess -ne "-deleteforce"){
 
