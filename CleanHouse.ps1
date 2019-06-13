@@ -140,7 +140,8 @@ ForEach ($box in $mailbox) {
 }
 
 Write-Host "The following users all have at least one result from your search: $mailboxArray"
-Write-Color "Mailbox count in array is:" $mailboxArray.count -Color Magenta
+Write-Color "Mailbox count in array is:" -Color Magenta -nnl
+Write-Host $mailboxArray.count
 
 if ($doprocess -ne "-deleteforce"){
 
