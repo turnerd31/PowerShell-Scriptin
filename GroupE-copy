@@ -1,0 +1,19 @@
+#Script to take all users who are in one group and adds then to a second group, if they aren't in it already
+
+$BaseGrp = "FIRSTGRP"
+$AddGrp = "GROUP YOU WANT TO ADD TO"
+$AdminCredentials = Get-Credential "ADMIN USERNAME"
+$count = 0
+
+ForEach ($user in (Get-ADGroupMember -identity $BaseGrp -recursive)){
+
+    if ((Get-ADPrincipalGroupMembership -Identity $user).name -notcontains $AddGrp ){
+        Add-ADGroupMember $AddGrp -Member $user -Credential $AdminCredentials
+        Write-Host "$user added to $AddGrp"
+        $count ++
+
+    }
+ 
+}
+
+Write-Host $count
