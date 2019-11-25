@@ -1,0 +1,223 @@
+<# 
+domainChange.ps1
+author: Security Team 
+Updated: 9/25/2019
+
+Notes:
+- Moving objects cross domain must be done from and to RID master designated DC's,
+    below are the RID Master servers for TWU at the time of writing this script.
+    If AD is updated these will need to be updated as well.
+
+    + Get-ADDomain [DOMAIN].dew.twu | format-table RIDMaster
+
+        RIDMaster Domain Controllers
+        ----------------------------
+        X
+        X
+
+- Script must be run under under the context of a DEW Enterprise Admin user.
+- User will be prompted to enter standard account credentials which will be used 
+  to run the AutoManage portion of this script by making a web request to ID Query.
+
+- PLEASE DO NOT USE THIS IF YOU DO NOT UNDERSTAND WHAT IT IS DOING, THERE ARE MANY
+  EDGE CASES WHERE PARTS OF THIS SCRIPT MAY FAIL AND REQUIRE MANUAL INTERVENTION!!
+
+#>
+
+
+#Checks if current user context is in the DEW Enterprise Admins group. if not exits.
+#If you circumvent this part of the code to run under a different context your going
+#to have a bad time. 
+$admins = @()
+foreach ($admin in $(Get-ADGroupMember -Server domain.controller -Identity "Enterprise Admins" | select samAccountName)) { $admins += $admin.samAccountName}
+if ($env:UserName -notin $admins) { 
+    Write-Output "`nThis script must be run in the context of a DEW Enterprise Admin.
+    - right click powershell 'Run as different user'
+    - passing credentials to cmdlets will not work.
+    - currently running as '$env:UserDomain\$env:UserName'`n"
+    exit
+} else {
+    Write-Host "`n`nPLEASE DO NOT USE THIS IF YOU DO NOT UNDERSTAND WHAT IT IS DOING, THERE ARE MANY `nEDGE CASES WHERE PARTS OF THIS SCRIPT MAY FAIL AND REQUIRE MANUAL INTERVENTION!!`n`n"
+}
+
+
+#Connect to ExchPio1
+function ConnectPioExchage($exchServer="exchange.server.address"){
+    Write-Host "++ Connecting to $exchServer"
+    try {
+        $ExchangeSession = New-PSSession -ConfigurationName Microsoft.Exchange -Name "ExchangeSession" -ConnectionUri http://$exchServer/PowerShell/
+        Import-PSSession $ExchangeSession
+    } catch {
+        Write-Host "`nFailed to make a connection to $exchServer`n"
+        exit
+    }
+}
+
+
+#Removes Mobile Devices if they exist, if they don't exist, does nothing.
+#Removal of these divices is mandatory before you are able to migrate a mailbox to another database.
+function RemoveMobileDevices($username, $targetDC="domain.controller", $verbose=$false) {
+    Write-Host "++ Removing exchange mobile devices from account."
+    $deviceIDs = Get-MobileDevice -Mailbox "$username" -DomainController "$targetDC" -activesync
+    foreach($deviceID in $deviceIDs) {
+        if ($deviceID.Identity -ne $null) {
+            if($verbose -eq $true){
+                Write-Host "-- Removing Device from $username - $($deviceID.Identity)"
+            }
+            Remove-MobileDevice -Identity "$($deviceID.Identity)" -DomainController "$targetDC" -Confirm:$false
+        }
+    }
+    try{
+        #Try and remove any device container.
+        Remove-ADObject -Identity "CN=ExchangeActiveSyncDevices,$username" -Server "$targetDC" -Confirm:$false
+        Write-Host "-- Removing Device container for $username - CN=ExchangeActiveSyncDevices,$username"
+    } catch {
+        Write-Host "!!! Exception Removing Device container, user may not have one to move."
+    }
+}
+
+
+#Moves AD identity and gapps contact from Pio to FS
+function MoveAccountToFS($user_DistinguishedName, $user_altRecipient) {
+    Write-Host "++ Moving AD account and GApps contact"
+    
+    try{
+        Move-ADObject -Identity "$user_DistinguishedName" -TargetPath "FQDN Path" -TargetServer "domain.controller" -Server "domain.controller"
+    } catch {
+        Write-Host "!!! Caught exception calling Move-ADObject for primary identity."
+    }
+    try{
+        Move-ADObject -Identity "$user_altRecipient" -TargetPath "FQDN path" -TargetServer "domain.controller" -Server "domain.controller"
+    } catch {
+        Write-Host "!!! Caught exception calling Move-ADObject for gapps contact."
+    }
+}
+
+
+#Call automanage to update account with apropriate dept and OU
+function RunADAutoManage($username, $autoManageCreds="fs\username") {
+    #Yes I know this looks ridiculous, this is the most secure straight-forward way I could pull this off.
+    function DoJobADAutoManage($username) {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+        $UserAgent = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.132 Safari/537.36'
+        $r=Invoke-WebRequest -Uri 'website' -UseDefaultCredentials -SessionVariable AutoManage
+
+        $fields = Invoke-WebRequest -Uri 'website' -WebSession $AutoManage | select -ExpandProperty inputfields | select name, value
+
+        $viewstate = $fields | ?{$_.name -match "VIEWSTATE$"} | select -ExpandProperty value
+        $viewstategenerator = $fields | ?{$_.name -match "VIEWSTATEGENERATOR"} | select -ExpandProperty value
+        $eventvalidation = $fields | ?{$_.name -match "EVENTVALIDATION"} | select -ExpandProperty value
+
+        $form = @{
+        '__EVENTTARGET' = ""
+        '__EVENTARGUMENT' = ""
+        '__VIEWSTATE' = "$viewstate"
+        '__VIEWSTATEGENERATOR' = "$viewstategenerator"
+        '__EVENTVALIDATION' = "$eventvalidation"
+        'ctl00$ContentPlaceHolder1$txtUserName' = "$username"
+        'ctl00$ContentPlaceHolder1$chkAutoManageAD' = "on"
+        'ctl00$ContentPlaceHolder1$btnExecAutoManage' = "Submit"
+        }
+
+        #$response = Invoke-WebRequest -Uri 'website' -WebSession $AutoManage -Method POST -Body $form -ContentType 'application/x-www-form-urlencoded'
+        #return $response.content
+
+        $response = Invoke-WebRequest -Uri 'website' -WebSession $AutoManage -Method POST -Body $form -ContentType 'application/x-www-form-urlencoded' -UseBasicParsing
+        # Cleanup the output.
+        $returnVal = $response.Content -split "`n" | Select-String -Pattern '(users completed|could not find)'
+        return $returnVal -replace "<.. />", " " -replace "    "
+    }
+
+
+    $radsb=(get-item Function:DoJobADAutoManage).ScriptBlock
+    Start-Job -Credential $autoManageCreds -Name "ADAMJob-$username" -ScriptBlock $radsb -ArgumentList "$username" | Out-Null
+    Wait-Job -Name "ADAMJob-$username" -Timeout 60 | Out-Null
+    Receive-Job -Name "ADAMJob-$username"
+    Remove-Job -name "ADAMJob-$username"
+}
+
+
+#Make a mailbox Move Request from Pio to FS
+function MoveMailboxFromPioToFS($username, $targetDC="domain.controller", $targetDB="FSMDB01", $checkStatus=$false) {
+    Write-Host "++ Moving Mailbox"
+    try {
+        New-MoveRequest -Identity "$username" -DomainController "$targetDC" -TargetDatabase "$targetDB" -Confirm:$false
+        if ($checkStatus -eq $true) {
+            Write-Host "++ Checking move request status"
+            Start-Sleep -s 10
+            Get-MoveRequest -DomainController "$targetDC"
+        }
+    } catch {
+        Write-Host "!!! Caught exception calling New-MoveRequest, quitting."
+        exit
+    }
+}
+
+
+#Fix skype stuffs
+function fixSkypeStuff($username) {
+    try {
+        #Create PS connection to skype server and invoke Enable-CsUser.
+        $skypeSess = New-PSSession -ConnectionUri skype.front.pool.address -Authentication Negotiate -Name skypePSS
+        Invoke-Command -Session $skypeSess -ScriptBlock {Enable-CsUser -Identity "$username" -RegistrarPool "skye.address" -SipAddressType SamAccountName -SipDomain "email.edu"}
+        Remove-PSSession -Name "skypePSS"
+    } catch {
+        Write-Host "!!! Caught exception updating skype for business informaiton."
+    }
+}
+
+
+#Do the dang thing.
+function MoveFromPioToFS($username, $autoManageCreds) {
+    
+    #Call function to connect to exchange server to handle mailbox move.
+    ConnectPioExchage -exchServer "exchange.server.domain"
+
+    #Get needed user variables
+    $userObject = Get-ADUser -Server "domain.controller" -Properties DistinguishedName,altRecipient,samAccountName -Identity $username 
+    $user_DistinguishedName = $userObject.DistinguishedName
+    $user_altRecipient = $userObject.altRecipient
+    $user_samAccountName = $userObject.samAccountName
+
+    #Write-Host "`nDN: $user_DistinguishedName `nAR: $user_altRecipient `nSA: $user_samAccountName"
+
+    #Remove all mobile devices and device container from active sync.
+    RemoveMobileDevices -username "$user_DistinguishedName" -verbose $true
+    Start-Sleep -s 10
+
+    #Move the account to the FS domain from pioneer.
+    MoveAccountToFS -user_DistinguishedName "$user_DistinguishedName" -user_altRecipient "$user_altRecipient"
+    Start-Sleep -s 20
+
+    #Make a web call to run ADAutoManage (Requires a user with access to ID Query)
+    RunADAutoManage -username "$user_samAccountName" -creds $autoManageCreds
+    Start-Sleep -s 10
+    
+    #Get new user variables after domain move.
+    $newUserObject = Get-ADUser -Server "domain.controller" -Properties DistinguishedName,altRecipient,samAccountName -Identity $username 
+    $newUser_DistinguishedName = $newUserObject.DistinguishedName
+    $newUser_altRecipient = $newUserObject.altRecipient
+    $newUser_samAccountName = $newUserObject.samAccountName
+
+    #Make a request to move the users mailbox to the FS database.
+    MoveMailboxFromPioToFS -username $newUser_DistinguishedName -checkStatus $true
+    Start-Sleep -s 10
+
+    #Remote-PSSession call to enable skype for business access.
+    fixSkypeStuff -username "$user_samAccountName"
+
+    #Close remote exchnage session.
+    Remove-PSSession -Name "ExchangeSession"
+    
+}
+
+$autoManCreds = Get-Credential -Message "Credentials needed for AD-Automanage (User with access to IDQuery, should be your standard login)." -UserName "fs\username"
+
+#NOW WITH MORE WHILE LOOP!!!
+while($true) {
+    Write-Host "`n`n-- Ctrl+C to quit --`n"
+    $uiUser = Read-Host -Prompt 'Pio -> FS [samAccountName]'
+    #Call primary function to migrate user to FS domain and do some other junk.
+    MoveFromPioToFS -username "$uiUser" -autoManageCreds $autoManCreds
+}
